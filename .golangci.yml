@@ -1,0 +1,29 @@
+---
+linters:
+  enable-all: true
+  disable:
+    # I just don't like these
+    - testpackage
+    - exhaustruct
+    - gochecknoglobals
+    - makezero
+    - goerr113
+    - gci
+    - gomnd
+    - godox
+    - varnamelen
+    # All deprecated
+    - exhaustivestruct
+    - golint
+    - interfacer
+    - maligned
+    - scopelint
+
+run:
+  timeout: 5m
+  go: "1.18" # TODO(ldez): we force to use an old version of Go for the CI and the tests.
+  skip-dirs:
+    - test/testdata_etc
+    - internal/cache
+    - internal/renameio
+    - internal/robustio

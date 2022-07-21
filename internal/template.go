@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"strings"
 	"text/template"
@@ -19,36 +20,62 @@ import (
 func WriteFileD(fileName string, targetDir string, content string) error {
 	targetFilePath := targetDir + "/" + fileName
 	_ = os.Mkdir(targetDir, os.ModePerm)
+
 	return WriteFile(targetFilePath, content)
 }
 
 // WriteFile dumps a given content on the file with path `targetFilePath`.
 func WriteFile(targetFilePath string, content string) error {
-	return ioutil.WriteFile(targetFilePath, []byte(content), 0777)
+	if err := ioutil.WriteFile(targetFilePath, []byte(content), 0o600); err != nil {
+		return fmt.Errorf(
+			"unable to write file: %w",
+			err,
+		)
+	}
+
+	return nil
 }
 
-// ExecuteTemplate loads a template file, executes is against a given function map and writes the output
+// ExecuteTemplate loads a template file, executes is against a given function map and writes the output.
 func ExecuteTemplate(sourceFilePath string, funcMap template.FuncMap, verbose bool) (string, error) {
 	fileContent, err := ioutil.ReadFile(sourceFilePath)
 	if err != nil {
-		return "", err
+		return "",
+			fmt.Errorf(
+				"unable to read file %s: %w",
+				sourceFilePath,
+				err,
+			)
 	}
+
 	t := template.New("ssmtpl").Funcs(funcMap)
 	if _, err := t.Parse(string(fileContent)); err != nil {
-		return "", err
+		return "",
+			fmt.Errorf(
+				"unable to parse template: %w",
+				err,
+			)
 	}
+
 	var buf bytes.Buffer
+
 	vals := map[string]interface{}{}
 	if err := t.Execute(&buf, vals); err != nil {
-		return "", err
+		return "",
+			fmt.Errorf(
+				"unable to execute template: %w",
+				err,
+			)
 	}
+
 	if verbose {
-		fmt.Println(string(buf.Bytes()))
+		log.Println(buf.String())
 	}
+
 	return buf.String(), nil
 }
 
-// GetFuncMap builds the relevant function map to helm_ssm
+// GetFuncMap builds the relevant function map to helm_ssm.
 func GetFuncMap(profile string) template.FuncMap {
 	// Clone the func map because we are adding context-specific functions.
 	var funcMap template.FuncMap = map[string]interface{}{}
@@ -60,11 +87,14 @@ func GetFuncMap(profile string) template.FuncMap {
 	funcMap["ssm"] = func(ssmPath string, options ...string) (string, error) {
 		optStr, err := resolveSSMParameter(awsSession, ssmPath, options)
 		str := ""
+
 		if optStr != nil {
 			str = *optStr
 		}
+
 		return str, err
 	}
+
 	return funcMap
 }
 
@@ -95,28 +125,37 @@ func handleOptions(options []string) (map[string]string, error) {
 		"prefix",
 		"region",
 	}
+
 	opts := map[string]string{}
+
 	for _, o := range options {
 		split := strings.Split(o, "=")
 		if len(split) != 2 {
-			return nil, fmt.Errorf("Invalid option: %s. Valid options: %s", o, validOptions)
+			return nil, fmt.Errorf("invalid option: %s. Valid options: %s", o, validOptions)
 		}
+
 		opts[split[0]] = split[1]
 	}
+
 	if _, exists := opts["required"]; !exists {
 		opts["required"] = "true"
 	}
+
 	if _, exists := opts["prefix"]; !exists {
 		opts["prefix"] = ""
 	}
+
 	return opts, nil
 }
 
 func newAWSSession(profile string) *session.Session {
 	// Specify profile for config and region for requests
-	session := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-		Profile:           profile,
-	}))
-	return session
+	return session.Must(
+		session.NewSessionWithOptions(
+			session.Options{
+				SharedConfigState: session.SharedConfigEnable,
+				Profile:           profile,
+			},
+		),
+	)
 }

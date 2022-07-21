@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,11 +11,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var valueFiles valueFilesList
-var targetDir string
-var profile string
-var verbose bool
-var dryRun bool
+var (
+	valueFiles valueFilesList
+	targetDir  string
+	profile    string
+	verbose    bool
+	dryRun     bool
+)
 
 type valueFilesList []string
 
@@ -30,6 +33,7 @@ func (v *valueFilesList) Set(value string) error {
 	for _, filePath := range strings.Split(value, ",") {
 		*v = append(*v, filePath)
 	}
+
 	return nil
 }
 
@@ -47,10 +51,13 @@ func main() {
 	f.StringVarP(&targetDir, "target-dir", "o", "", "dir to output content")
 	f.StringVarP(&profile, "profile", "p", "", "aws profile to fetch the ssm parameters")
 
-	cmd.MarkFlagRequired("values")
+	if err := cmd.MarkFlagRequired("values"); err != nil {
+		log.Fatalf("unable to mark cobra flag required: %s", err.Error())
+		os.Exit(1)
+	}
 
 	if err := cmd.Execute(); err != nil {
-		fmt.Println(err)
+		log.Fatalf("unable to run cobra command: %s", err.Error())
 		os.Exit(1)
 	}
 }
@@ -60,19 +67,40 @@ func run(cmd *cobra.Command, args []string) error {
 	for _, filePath := range valueFiles {
 		content, err := hssm.ExecuteTemplate(filePath, funcMap, verbose)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to execute template: %w", err)
 		}
+
 		if !dryRun {
-			write(filePath, targetDir, content)
+			if err := write(filePath, targetDir, content); err != nil {
+				return fmt.Errorf("unable to write output: %w", err)
+			}
 		}
 	}
+
 	return nil
 }
 
 func write(filePath string, targetDir string, content string) error {
 	if targetDir != "" {
 		fileName := filepath.Base(filePath)
-		return hssm.WriteFileD(fileName, targetDir, content)
+
+		if err := hssm.WriteFileD(fileName, targetDir, content); err != nil {
+			return fmt.Errorf(
+				"unable to dump content of file to %s/%s: %w",
+				targetDir,
+				fileName,
+				err,
+			)
+		}
 	}
-	return hssm.WriteFile(filePath, content)
+
+	if err := hssm.WriteFile(filePath, content); err != nil {
+		return fmt.Errorf(
+			"unable to write file %s: %w",
+			filePath,
+			err,
+		)
+	}
+
+	return nil
 }

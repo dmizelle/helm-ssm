@@ -1,3 +1,4 @@
+---
 name: "ssm"
 version: "dev"
 usage: "Inject AWS SSM parameters into Helm values files"

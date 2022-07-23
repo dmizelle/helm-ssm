@@ -9,4 +9,4 @@ jobs:
       - name: Setup Nix
         uses: cachix/install-nix-action@v17
       - name: Run pre-commit
-        run: nix-develop -c -- pre-commit run -a
+        run: nix develop -c -- pre-commit run -a
